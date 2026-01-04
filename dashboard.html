@@ -1,1 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart Weather Station Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<style>
+:root{
+    --primary:#1e3c72;
+    --accent:#2a5298;
+    --bg:#f4f6f9;
+    --card:#ffffff;
+    --shadow:0 12px 30px rgba(0,0,0,0.1);
+    --radius:14px;
+}
+
+body{
+    margin:0;
+    font-family:"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:#2c3e50;
+}
+
+header{
+    background:linear-gradient(135deg,var(--primary),var(--accent));
+    color:white;
+    padding:35px 20px;
+    text-align:center;
+}
+
+main{
+    max-width:1400px;
+    margin:auto;
+    padding:30px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(420px,1fr));
+    gap:25px;
+}
+
+.card{
+    background:var(--card);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:20px;
+}
+
+.card h2{
+    margin-top:0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.info{
+    font-size:14px;
+    color:#555;
+    margin-bottom:10px;
+}
+
+button{
+    background:var(--accent);
+    color:white;
+    border:none;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+.chart{
+    display:none;
+    margin-top:15px;
+}
+
+iframe{
+    width:100%;
+    height:260px;
+    border:none;
+    border-radius:10px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+}
+
+th,td{
+    padding:12px;
+    border-bottom:1px solid #ddd;
+    text-align:center;
+}
+
+th{
+    background:var(--accent);
+    color:white;
+}
+
+footer{
+    text-align:center;
+    margin:40px 0;
+    font-size:14px;
+    color:#555;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>🌦️ Smart Weather Station Dashboard</h1>
+<p>Real-time Monitoring & Analytics (Malaysia Time)</p>
+</header>
+
+<main>
+
+<!-- SENSOR CARDS -->
+<div class="grid">
+
+<div class="card">
+<h2>🌡️ Temperature (°C)</h2>
+<p class="info">Ambient temperature measured using the BME280 sensor.</p>
+<button onclick="toggleChart('temp')">📊 View Graph</button>
+<div id="temp" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/1?api_key=CD3R84AROYXS7HND&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>💧 Humidity (%)</h2>
+<p class="info">Relative humidity level in surrounding air.</p>
+<button onclick="toggleChart('hum')">📊 View Graph</button>
+<div id="hum" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/2?api_key=CD3R84AROYXS7HND&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>🌬️ Air Pressure (hPa)</h2>
+<p class="info">Atmospheric pressure used for weather trend analysis.</p>
+<button onclick="toggleChart('pres')">📊 View Graph</button>
+<div id="pres" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/3?api_key=CD3R84AROYXS7HND&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>🍃 Wind Speed (rot/s)</h2>
+<p class="info">Estimated from reed switch rotation counts.</p>
+<button onclick="toggleChart('wind')">📊 View Graph</button>
+<div id="wind" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/4?api_key=CD3R84AROYXS7HND&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+</div>
+
+<!-- SUMMARY TABLE -->
+<div class="card" style="margin-top:30px;">
+<h2>📊 Live Data Summary (Malaysia Time)</h2>
+
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Latest</th>
+<th>Min</th>
+<th>Max</th>
+<th>Average</th>
+<th>Last Updated (MYT)</th>
+</tr>
+</thead>
+<tbody id="dataTable">
+<tr><td colspan="6">Loading...</td></tr>
+</tbody>
+</table>
+</div>
+
+</main>
+
+<footer>
+<strong>FSKM UMT</strong> | CSM3313 Internet of Things<br>
+Smart Pico W Weather Monitoring System
+</footer>
+
+<script>
+function toggleChart(id){
+    const charts = document.querySelectorAll(".chart");
+    const target = document.getElementById(id);
+    const isOpen = target.style.display === "block";
+
+    charts.forEach(c => c.style.display = "none");
+    if (!isOpen) target.style.display = "block";
+}
+
+const CHANNEL = "3218142";
+const KEY = "CD3R84AROYXS7HND";
+const STORAGE_KEY = "weather_history";
+
+async function loadData(){
+    const res = await fetch(
+        `https://api.thingspeak.com/channels/${CHANNEL}/feeds.json?api_key=${KEY}&results=100`
+    );
+    const data = await res.json();
+    const newFeeds = data.feeds;
+
+    // Load existing stored data
+    let history = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+    // Merge without duplicates
+    newFeeds.forEach(nf => {
+        if (!history.some(h => h.created_at === nf.created_at)) {
+            history.push(nf);
+        }
+    });
+
+    // Save back to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+
+    renderTable(history);
+}
+
+function renderTable(feeds){
+    const map = {
+        "Temperature (°C)": "field1",
+        "Humidity (%)": "field2",
+        "Pressure (hPa)": "field3",
+        "Wind Speed (rot/s)": "field4"
+    };
+
+    let html = "";
+
+    for (const [name, field] of Object.entries(map)) {
+        const values = feeds
+            .map(f => parseFloat(f[field]))
+            .filter(v => !isNaN(v));
+
+        if (!values.length) continue;
+
+        const lastTime = new Date(feeds.at(-1).created_at)
+            .toLocaleString("en-MY", {
+                timeZone: "Asia/Kuala_Lumpur",
+                hour12: true
+            });
+
+        html += `
+        <tr>
+            <td>${name}</td>
+            <td>${values.at(-1).toFixed(2)}</td>
+            <td>${Math.min(...values).toFixed(2)}</td>
+            <td>${Math.max(...values).toFixed(2)}</td>
+            <td>${(values.reduce((a,b)=>a+b,0)/values.length).toFixed(2)}</td>
+            <td>${lastTime}</td>
+        </tr>`;
+    }
+
+    document.getElementById("dataTable").innerHTML = html;
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
